@@ -3,3 +3,5 @@
 .idea/modules.xml
 .idea/misc.xml
 .idea/MPI_Bees.iml
+.vscode/launch.json
+export.tar
