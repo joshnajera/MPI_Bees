@@ -6,6 +6,7 @@ from os import system
 from copy import deepcopy
 import random as rand
 import mpi4py
+import math
 
 # location = collections.namedtuple('Point', ['x', 'y'])
 # LocationOfItem = location(0, 0)
@@ -33,16 +34,16 @@ class Board(object):
         """   Sets up a board with dimensions: SIZE_X x SIZE_Y   """
 
         # Instantiate board with given dimensions
-        self.dimension = Board.dimensions(x=40, y=30)
+        self.dimension = Board.dimensions(x=20, y=20)
         self.board = self.blank_map(self.dimension)
 
         # Generate walls  -- TODO Validation of map after generation
-        for _ in range(rand.randint(7, 10)):
-            self.generate_wall()
+        # for _ in range(rand.randint(7, 10)):
+        #     self.generate_wall()
 
         # Generate 'hive'
-        pnt = self.new_point()
-        self.board[pnt.y][pnt.x] = '&'
+        goal_pnt = self.new_point()
+        self.board[goal_pnt.y][goal_pnt.x] = '&'
 
         # Generate 'Bee'
         pnt = self.new_point()
@@ -50,7 +51,7 @@ class Board(object):
         print(pnt)
         bee1 = Bee(self, pnt)
         # bee1.wander()
-        bee1.navigate()
+        bee1.navigate(goal_pnt)
 
 
     def __str__(self):
@@ -171,25 +172,38 @@ class Bee(object):
             print(self.board)
             sleep(.1)
 
-    def navigate(self):
-        nav = Navigator(self.board.board)
+    def navigate(self, goal_pnt):
+        """   Navigates Bee to desired point   """
+        nav = Navigator(self.board.board, self.pos, goal_pnt)
+        nav.astar(self.pos, goal_pnt)
 
 class Navigator(object):
     """   Manages A* navigation   """
 
+    # heuristic = namedtuple('Heuristics', 'g h sum')
     # G     = Distance from current position
     # H     = Distance to destination
     # SUM   = H + G
-    heuristic = namedtuple('Heuristics', 'g h sum')
+    node = namedtuple('Node', 'location g h weight')
     location = namedtuple('Point', 'x y')
-    node = namedtuple('Node', 'location heuristic')
 
-    def __init__(self, board_array):
+    def __init__(self, board_array, start, dest):
         """   Initializes with a copy of the board   """
 
         self.board = deepcopy(board_array)
         self.closed = []
         self.open = []
+
+        # dist = Navigator.distance(Navigator.location(0,0), Navigator.location(0,1))
+        # print(dist)
+
+        # nd = Navigator.make_node(pnt=Navigator.location(2, 2),\
+        #     start=Navigator.location(0, 0), dest=Navigator.location(2, 4))
+        # print(nd)
+
+        origin = Navigator.make_node(start, start, dest)
+        self.open.append(origin)
+        print("Origin",origin)
 
         # for row in self.board:
         #     for column in row:
@@ -197,9 +211,26 @@ class Navigator(object):
         #     print()
 
 
+    @staticmethod
+    def distance(start=location(0, 0), dest=location(0, 0)):
+        """   Returns a rounded, and weighted distance beteen two points   """
+
+        result = math.sqrt(math.pow(start.x - dest.x, 2) + math.pow(start.y - dest.y, 2))
+        return int(result*10)
+
+
+    @staticmethod
+    def make_node(pnt=location(0, 0), start=location(0, 0), dest=location(0, 0)):
+        """   Makes a node out of given data   """
+
+        # G Heuristic = distance from start to point
+        g = Navigator.distance(pnt, start)
+        # H Heuristic = distance from point to destination
+        h = Navigator.distance(pnt, dest)
+        return Navigator.node(pnt, g, h, g+h)
+
     def astar(self, start=location(0, 0), dest=location(0, 0)):
         """   Performs a-star navigation   """
-
         pass
 
     def expand(self, pnt=location(0, 0)):
