@@ -25,21 +25,19 @@ class Board(object):
         *   -   Food
     """
 
-
     dimensions = namedtuple('BoardDimensions', 'x y')
     point = namedtuple('Point', 'x y')
-
 
     def __init__(self):
         """   Sets up a board with dimensions: SIZE_X x SIZE_Y   """
 
         # Instantiate board with given dimensions
-        self.dimension = Board.dimensions(x=20, y=20)
+        self.dimension = Board.dimensions(x=60, y=30)
         self.board = self.blank_map(self.dimension)
 
         # Generate walls  -- TODO Validation of map after generation
-        # for _ in range(rand.randint(7, 10)):
-        #     self.generate_wall()
+        for _ in range(rand.randint(9, 12)):
+            self.generate_wall()
 
         # Generate 'hive'
         goal_pnt = self.new_point()
@@ -51,6 +49,7 @@ class Board(object):
         print(pnt)
         bee1 = Bee(self, pnt)
         # bee1.wander()
+        print(self)
         bee1.navigate(goal_pnt)
 
 
@@ -175,7 +174,16 @@ class Bee(object):
     def navigate(self, goal_pnt):
         """   Navigates Bee to desired point   """
         nav = Navigator(self.board.board, self.pos, goal_pnt)
-        nav.astar(self.pos, goal_pnt)
+        result = nav.astar()
+        for item in result:
+            system('cls')
+            new_pos = item
+            self.board.move_to(self.pos, new_pos)
+            self.pos=new_pos
+            print(self.board)
+            sleep(.03)
+        print("Done")
+
 
 class Navigator(object):
     """   Manages A* navigation   """
@@ -184,7 +192,7 @@ class Navigator(object):
     # G     = Distance from current position
     # H     = Distance to destination
     # SUM   = H + G
-    node = namedtuple('Node', 'location g h weight')
+    node = namedtuple('Node', 'location parent g h weight')
     location = namedtuple('Point', 'x y')
 
     def __init__(self, board_array, start, dest):
@@ -192,24 +200,13 @@ class Navigator(object):
 
         self.board = deepcopy(board_array)
         self.closed = []
+        self.path = {}
         self.open = []
-
-        # dist = Navigator.distance(Navigator.location(0,0), Navigator.location(0,1))
-        # print(dist)
-
-        # nd = Navigator.make_node(pnt=Navigator.location(2, 2),\
-        #     start=Navigator.location(0, 0), dest=Navigator.location(2, 4))
-        # print(nd)
-
-        origin = Navigator.make_node(start, start, dest)
-        self.open.append(origin)
-        print("Origin",origin)
-
-        # for row in self.board:
-        #     for column in row:
-        #         print(column, end='')
-        #     print()
-
+        self.dest = dest
+        self.start = start
+        self.origin = self.make_node(start, start)
+        self.open.append(self.origin)
+        print("Origin", self.origin)
 
     @staticmethod
     def distance(start=location(0, 0), dest=location(0, 0)):
@@ -219,25 +216,77 @@ class Navigator(object):
         return int(result*10)
 
 
-    @staticmethod
-    def make_node(pnt=location(0, 0), start=location(0, 0), dest=location(0, 0)):
+    def make_node(self, point=location(0, 0), parent=location(0, 0)):
         """   Makes a node out of given data   """
 
         # G Heuristic = distance from start to point
-        g = Navigator.distance(pnt, start)
+        g = Navigator.distance(point, parent)
         # H Heuristic = distance from point to destination
-        h = Navigator.distance(pnt, dest)
-        return Navigator.node(pnt, g, h, g+h)
+        h = Navigator.distance(point, self.dest)
+        return Navigator.node(point, parent, g, h, g+h)
 
-    def astar(self, start=location(0, 0), dest=location(0, 0)):
+    @staticmethod
+    def getKey(nd=node(location(0, 0), location(0, 0), 0, 0, 0)):
+        """   Gets key value to order the nodes by weight   """
+
+        return nd.weight
+
+    def calculate_path(self):
+        """   Reverses the path and calculates shortest path   """
+        prior_point = self.path[self.dest]
+        full_path = [self.dest]
+
+        while prior_point != self.start:
+            full_path.insert(0, prior_point)
+            prior_point = self.path[prior_point]
+        self.path = full_path
+
+    def astar(self):
         """   Performs a-star navigation   """
-        pass
+
+        try:
+            next_node = self.open.pop(0)
+        except IndexError:
+            print("No path found!")
+            exit()
+        if next_node.location != self.start:
+            self.closed.append(next_node)
+            self.path[next_node.location] = next_node.parent
+        self.board[next_node.location.y][next_node.location.x] = 'X'
+        if next_node.location.x == self.dest.x and next_node.location.y == self.dest.y:
+            print("FOUND")
+            self.calculate_path()
+            return self.path
+        self.expand(next_node.location)
+        return self.astar()
 
     def expand(self, pnt=location(0, 0)):
         """   Expands / updates neighbors   """
 
-        pass
+        # Check all neighbors
+        for i in range(-1, 2):
+            for j in range(-1, 2):
+
+                x = pnt.x + j
+                y = pnt.y + i
+
+                point = self.board[y][x]
+                if point in {'#', '%', 'X'}:
+                    continue
+                new_node = self.make_node(Navigator.location(x, y), pnt)
+                if point == 'O':
+                    for node in self.open:
+                        if node.location.x == x and node.location.y == y:
+                            if new_node.weight < node.weight:
+                                self.open.remove(node)
+                                self.open.append(new_node)
+                    continue
+                self.board[y][x] = 'O'
+
+
+                self.open.append(new_node)
+        self.open.sort(key=Navigator.getKey)
+
 
 
 MY_BOARD = Board()
-print(MY_BOARD)
