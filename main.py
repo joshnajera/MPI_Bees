@@ -48,6 +48,8 @@ class Board(object):
         self.board[pnt.y][pnt.x] = '%'
         print(pnt)
         bee1 = Bee(self, pnt)
+
+        '''   Testing Behavior   '''
         # bee1.wander()
         print(self)
         bee1.navigate(goal_pnt)
@@ -114,7 +116,9 @@ class Board(object):
 
     def blank_map(self, size=dimensions(0, 0)):
         """   Generates a blank map with boarders   """
+
         board = [[' ' for j in range(size.x)] for i in range(size.y)]
+
         # Generate boundary
         for i, column in enumerate(board):
             for j, _ in enumerate(column):
@@ -129,15 +133,18 @@ class Board(object):
 class Bee(object):
     """   Bee   """
 
-
     location = namedtuple('Point', 'x y')
 
     def __init__(self, board, point=location(0, 0)):
         self.board = board
         self.pos = point
 
+
     def rand_pos(self):
+        """   Randomly select open neighboring space   """
+
         directions = ['L', 'R', 'U', 'D']
+
         while True:
             dir = directions[rand.randint(0, len(directions) - 1)]
             if dir == 'L':
@@ -152,8 +159,10 @@ class Bee(object):
             elif dir == 'D':
                 next_x = 0
                 next_y = 1
+
             next_x = next_x + self.pos.x
             next_y = next_y + self.pos.y
+
             result = self.board.check_point( Bee.location(next_x, next_y) )
             if result == ' ':
                 print("Going %s"%(dir))
@@ -161,8 +170,11 @@ class Bee(object):
             else:
                 print("Failed going %s"%(dir))
                 directions.remove(dir)
+                
 
     def wander(self):
+        """   Wander around aimlessly   """
+
         while True:
             system('cls')
             new_pos = self.rand_pos()
@@ -171,8 +183,10 @@ class Bee(object):
             print(self.board)
             sleep(.1)
 
+
     def navigate(self, goal_pnt):
         """   Navigates Bee to desired point   """
+
         nav = Navigator(self.board.board, self.pos, goal_pnt)
         result = nav.astar()
         for item in result:
@@ -192,21 +206,26 @@ class Navigator(object):
     # G     = Distance from current position
     # H     = Distance to destination
     # SUM   = H + G
+
     node = namedtuple('Node', 'location parent g h weight')
     location = namedtuple('Point', 'x y')
+
 
     def __init__(self, board_array, start, dest):
         """   Initializes with a copy of the board   """
 
+        # Deep copy so we don't touch Board's
         self.board = deepcopy(board_array)
+        self.start = start
+        self.dest = dest
         self.closed = []
         self.path = {}
         self.open = []
-        self.dest = dest
-        self.start = start
+
+        # Initiate algorithm with start point
         self.origin = self.make_node(start, start)
         self.open.append(self.origin)
-        print("Origin", self.origin)
+
 
     @staticmethod
     def distance(start=location(0, 0), dest=location(0, 0)):
@@ -220,16 +239,19 @@ class Navigator(object):
         """   Makes a node out of given data   """
 
         # G Heuristic = distance from start to point
-        g = Navigator.distance(point, parent)
+        g_heur = Navigator.distance(point, parent)
         # H Heuristic = distance from point to destination
-        h = Navigator.distance(point, self.dest)
-        return Navigator.node(point, parent, g, h, g+h)
+        h_heur = Navigator.distance(point, self.dest)
+
+        return Navigator.node(point, parent, g_heur, h_heur, g_heur+h_heur)
+
 
     @staticmethod
-    def getKey(nd=node(location(0, 0), location(0, 0), 0, 0, 0)):
+    def get_key(node=node(location(0, 0), location(0, 0), 0, 0, 0)):
         """   Gets key value to order the nodes by weight   """
 
-        return nd.weight
+        return node.weight
+
 
     def calculate_path(self):
         """   Reverses the path and calculates shortest path   """
@@ -241,6 +263,7 @@ class Navigator(object):
             prior_point = self.path[prior_point]
         self.path = full_path
 
+
     def astar(self):
         """   Performs a-star navigation   """
 
@@ -249,16 +272,20 @@ class Navigator(object):
         except IndexError:
             print("No path found!")
             exit()
+
         if next_node.location != self.start:
             self.closed.append(next_node)
             self.path[next_node.location] = next_node.parent
+
         self.board[next_node.location.y][next_node.location.x] = 'X'
         if next_node.location.x == self.dest.x and next_node.location.y == self.dest.y:
             print("FOUND")
             self.calculate_path()
             return self.path
         self.expand(next_node.location)
+
         return self.astar()
+
 
     def expand(self, pnt=location(0, 0)):
         """   Expands / updates neighbors   """
@@ -285,7 +312,7 @@ class Navigator(object):
 
 
                 self.open.append(new_node)
-        self.open.sort(key=Navigator.getKey)
+        self.open.sort(key=Navigator.get_key)
 
 
 
