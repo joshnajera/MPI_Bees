@@ -50,9 +50,9 @@ class Board(object):
         bee1 = Bee(self, pnt)
 
         '''   Testing Behavior   '''
-        # bee1.wander()
         print(self)
-        bee1.navigate(goal_pnt)
+        # bee1.navigate(goal_pnt)
+        bee1.wander()
 
 
     def __str__(self):
@@ -66,14 +66,14 @@ class Board(object):
         return output
 
 
-    def move_to(self, old_pos=point(0, 0), new_pos=point(0, 0)):
+    def move_to(self, old_pos, new_pos):
         """   Moves a bee to a new location   """
 
         self.board[old_pos.y][old_pos.x] = ' '
         self.board[new_pos.y][new_pos.x] = '%'
 
 
-    def check_point(self, pnt=point(0, 0)):
+    def check_point(self, pnt):
         """   Gets what is currently at a given position   """
 
         return self.board[pnt.y][pnt.x]
@@ -135,7 +135,7 @@ class Bee(object):
 
     location = namedtuple('Point', 'x y')
 
-    def __init__(self, board, point=location(0, 0)):
+    def __init__(self, board, point):
         self.board = board
         self.pos = point
 
@@ -143,34 +143,18 @@ class Bee(object):
     def rand_pos(self):
         """   Randomly select open neighboring space   """
 
-        directions = ['L', 'R', 'U', 'D']
+        # directions = ['L', 'R', 'U', 'D']
 
         while True:
-            dir = directions[rand.randint(0, len(directions) - 1)]
-            if dir == 'L':
-                next_x = -1
-                next_y = 0
-            elif dir == 'R':
-                next_x = 1
-                next_y = 0
-            elif dir == 'U':
-                next_x = 0
-                next_y = -1
-            elif dir == 'D':
-                next_x = 0
-                next_y = 1
+            directions = [(0,1), (0,-1), (1,0), (-1,0)]
+            dx, dy = rand.choice(directions)
+            next_x = self.pos.x + dx
+            next_y = self.pos.y + dy
 
-            next_x = next_x + self.pos.x
-            next_y = next_y + self.pos.y
-
-            result = self.board.check_point( Bee.location(next_x, next_y) )
+            result = self.board.check_point(Bee.location(next_x, next_y))
             if result == ' ':
-                print("Going %s"%(dir))
-                return( Bee.location(next_x, next_y) )
-            else:
-                print("Failed going %s"%(dir))
-                directions.remove(dir)
-                
+                return Bee.location(next_x, next_y)
+
 
     def wander(self):
         """   Wander around aimlessly   """
@@ -211,6 +195,21 @@ class Navigator(object):
     location = namedtuple('Point', 'x y')
 
 
+    @staticmethod
+    def get_key(node):
+        """   Gets key value to 'sort' the nodes by weight   """
+
+        return node.weight
+
+
+    @staticmethod
+    def distance(start=location(0, 0), dest=location(0, 0)):
+        """   Returns a rounded, and weighted distance beteen two points   """
+
+        result = math.sqrt(math.pow(start.x - dest.x, 2) + math.pow(start.y - dest.y, 2))
+        return int(result*10)
+
+
     def __init__(self, board_array, start, dest):
         """   Initializes with a copy of the board   """
 
@@ -227,15 +226,7 @@ class Navigator(object):
         self.open.append(self.origin)
 
 
-    @staticmethod
-    def distance(start=location(0, 0), dest=location(0, 0)):
-        """   Returns a rounded, and weighted distance beteen two points   """
-
-        result = math.sqrt(math.pow(start.x - dest.x, 2) + math.pow(start.y - dest.y, 2))
-        return int(result*10)
-
-
-    def make_node(self, point=location(0, 0), parent=location(0, 0)):
+    def make_node(self, point, parent):
         """   Makes a node out of given data   """
 
         # G Heuristic = distance from start to point
@@ -244,13 +235,6 @@ class Navigator(object):
         h_heur = Navigator.distance(point, self.dest)
 
         return Navigator.node(point, parent, g_heur, h_heur, g_heur+h_heur)
-
-
-    @staticmethod
-    def get_key(node=node(location(0, 0), location(0, 0), 0, 0, 0)):
-        """   Gets key value to order the nodes by weight   """
-
-        return node.weight
 
 
     def calculate_path(self):
@@ -287,7 +271,7 @@ class Navigator(object):
         return self.astar()
 
 
-    def expand(self, pnt=location(0, 0)):
+    def expand(self, pnt):
         """   Expands / updates neighbors   """
 
         # Check all neighbors
