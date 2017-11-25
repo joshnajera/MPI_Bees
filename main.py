@@ -8,11 +8,12 @@ import random as rand
 import mpi4py
 import math
 
-# location = collections.namedtuple('Point', ['x', 'y'])
-# LocationOfItem = location(0, 0)
-# print(location)
 
 rand.seed()
+
+BoardDimensions = namedtuple('BoardDimensions', 'x y')
+Node = namedtuple('Node', 'location parent g h weight')
+Point = namedtuple('Point', 'x y')
 
 class Board(object):
     """
@@ -25,14 +26,13 @@ class Board(object):
         *   -   Food
     """
 
-    dimensions = namedtuple('BoardDimensions', 'x y')
-    point = namedtuple('Point', 'x y')
+    Bees = [None]
 
     def __init__(self):
         """   Sets up a board with dimensions: SIZE_X x SIZE_Y   """
 
         # Instantiate board with given dimensions
-        self.dimension = Board.dimensions(x=60, y=30)
+        self.dimension = BoardDimensions(x=60, y=30)
         self.board = self.blank_map(self.dimension)
 
         # Generate walls  -- TODO Validation of map after generation
@@ -43,16 +43,12 @@ class Board(object):
         goal_pnt = self.new_point()
         self.board[goal_pnt.y][goal_pnt.x] = '&'
 
-        # Generate 'Bee'
-        pnt = self.new_point()
-        self.board[pnt.y][pnt.x] = '%'
-        print(pnt)
-        bee1 = Bee(self, pnt)
 
-        '''   Testing Behavior   '''
-        print(self)
-        # bee1.navigate(goal_pnt)
-        bee1.wander()
+    def add_bee(self):
+        pos = self.new_point()
+        Board.Bees.append(pos)
+        self.board[pos.y][pos.x] = '%'
+        return pos
 
 
     def __str__(self):
@@ -84,17 +80,17 @@ class Board(object):
 
         x = rand.randrange(1, self.dimension.x - 2)
         y = rand.randrange(1, self.dimension.y - 2)
-        return Board.point(x, y)
+        return Point(x, y)
 
 
     def new_point(self):
-        """   Generates a new random point within the boundary   """
+        """   Generates a random empty point within the boundary   """
 
         while True:
             x = rand.randrange(1, self.dimension.x - 2)
             y = rand.randrange(1, self.dimension.y - 2)
-            if self.board[y][x] != '#':
-                return Board.point(x, y)
+            if self.board[y][x] == ' ':
+                return Point(x, y)
 
 
     def generate_wall(self):
@@ -114,7 +110,7 @@ class Board(object):
                 self.board[start.y + i][start.x + j] = '#'
 
 
-    def blank_map(self, size=dimensions(0, 0)):
+    def blank_map(self, size=BoardDimensions(0, 0)):
         """   Generates a blank map with boarders   """
 
         board = [[' ' for j in range(size.x)] for i in range(size.y)]
@@ -129,11 +125,8 @@ class Board(object):
         return board
 
 
-
 class Bee(object):
     """   Bee   """
-
-    location = namedtuple('Point', 'x y')
 
     def __init__(self, board, point):
         self.board = board
@@ -143,17 +136,20 @@ class Bee(object):
     def rand_pos(self):
         """   Randomly select open neighboring space   """
 
-        # directions = ['L', 'R', 'U', 'D']
-
+        directions = [(0,1), (0,-1), (1,0), (-1,0)]
         while True:
-            directions = [(0,1), (0,-1), (1,0), (-1,0)]
-            dx, dy = rand.choice(directions)
+            choice = rand.choice(directions)
+            dx, dy = choice
             next_x = self.pos.x + dx
             next_y = self.pos.y + dy
 
-            result = self.board.check_point(Bee.location(next_x, next_y))
+            result = self.check_point(Point(next_x, next_y))
             if result == ' ':
-                return Bee.location(next_x, next_y)
+                return Point(next_x, next_y)
+            else: 
+                directions.remove(choice)
+                if not directions:
+                    return False
 
 
     def wander(self):
@@ -182,6 +178,11 @@ class Bee(object):
             sleep(.03)
         print("Done")
 
+    def check_point(self, pnt):
+        """   Gets what is currently at a given position   """
+
+        return self.board[pnt.y][pnt.x]
+
 
 class Navigator(object):
     """   Manages A* navigation   """
@@ -190,9 +191,6 @@ class Navigator(object):
     # G     = Distance from current position
     # H     = Distance to destination
     # SUM   = H + G
-
-    node = namedtuple('Node', 'location parent g h weight')
-    location = namedtuple('Point', 'x y')
 
 
     @staticmethod
@@ -203,7 +201,7 @@ class Navigator(object):
 
 
     @staticmethod
-    def distance(start=location(0, 0), dest=location(0, 0)):
+    def distance(start=Point(0, 0), dest=Point(0, 0)):
         """   Returns a rounded, and weighted distance beteen two points   """
 
         result = math.sqrt(math.pow(start.x - dest.x, 2) + math.pow(start.y - dest.y, 2))
@@ -234,7 +232,7 @@ class Navigator(object):
         # H Heuristic = distance from point to destination
         h_heur = Navigator.distance(point, self.dest)
 
-        return Navigator.node(point, parent, g_heur, h_heur, g_heur+h_heur)
+        return Node(point, parent, g_heur, h_heur, g_heur+h_heur)
 
 
     def calculate_path(self):
@@ -284,7 +282,7 @@ class Navigator(object):
                 point = self.board[y][x]
                 if point in {'#', '%', 'X'}:
                     continue
-                new_node = self.make_node(Navigator.location(x, y), pnt)
+                new_node = self.make_node(Point(x, y), pnt)
                 if point == 'O':
                     for node in self.open:
                         if node.location.x == x and node.location.y == y:
@@ -297,7 +295,3 @@ class Navigator(object):
 
                 self.open.append(new_node)
         self.open.sort(key=Navigator.get_key)
-
-
-
-MY_BOARD = Board()
