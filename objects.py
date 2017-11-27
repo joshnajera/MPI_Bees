@@ -26,7 +26,6 @@ class Board(object):
         *   -   Food
     """
 
-    Bees = [None]
 
     def __init__(self):
         """   Sets up a board with dimensions: SIZE_X x SIZE_Y   """
@@ -34,6 +33,7 @@ class Board(object):
         # Instantiate board with given dimensions
         self.dimension = BoardDimensions(x=60, y=30)
         self.board = self.blank_map(self.dimension)
+        self.Bees = [None]
 
         # Generate walls  -- TODO Validation of map after generation
         for _ in range(rand.randint(9, 12)):
@@ -46,7 +46,8 @@ class Board(object):
 
     def add_bee(self):
         pos = self.new_point()
-        Board.Bees.append(pos)
+        print(pos)
+        self.Bees.append(pos)
         self.board[pos.y][pos.x] = '%'
         return pos
 
@@ -65,8 +66,8 @@ class Board(object):
     def move_to(self, old_pos, new_pos):
         """   Moves a bee to a new location   """
 
-        self.board[old_pos.y][old_pos.x] = ' '
         self.board[new_pos.y][new_pos.x] = '%'
+        self.board[old_pos.y][old_pos.x] = ' '
 
 
     def check_point(self, pnt):

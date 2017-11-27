@@ -5,14 +5,21 @@ Parallel Hello World
 
 from mpi4py import MPI
 from objects import Bee, Board
+from collections import namedtuple
 import random as rand
+from os import system
 import sys
+from time import sleep
 
 size = MPI.COMM_WORLD.Get_size()
 rank = MPI.COMM_WORLD.Get_rank()
 name = MPI.Get_processor_name()
 info = MPI.Status()
 comm = MPI.COMM_WORLD
+
+BoardDimensions = namedtuple('BoardDimensions', 'x y')
+Node = namedtuple('Node', 'location parent g h weight')
+Point = namedtuple('Point', 'x y')
 
 # lower-cased   send,recv,isend,irecv correlate with generic python data objects
 # uper-cased    Send,Recv,Isend,Irecv correlate with buffered like data objects
@@ -21,7 +28,6 @@ comm = MPI.COMM_WORLD
 def bee_test():
 
     print('{}/{} starting'.format(rank, size))
-    print(comm)
     board = None
     pos = None
 
@@ -32,13 +38,14 @@ def bee_test():
         # Send other nodes their locations
         pos = comm.scatter(root.Bees, root=0)
         print("Everything initiated")
-        print(root)
 
         while True:
             # Update everyone and ask them what they wants
+            sleep(.25)
+            print(root)
             new_board = comm.bcast(board, root=0)
             requests = comm.gather(root=0)
-            for i, request in enumerate(requests):
+            for i, request in enumerate(requests): 
 
                 # Skips if there is no request (i.e. Root makes no requests but still needs to pass something into gather?)
                 if not request:
@@ -56,17 +63,11 @@ def bee_test():
 
                     # Update the position of the bee
                     root.move_to(root.Bees[i], request[1])
-                    root.Bees[i] = requests[1]
+                    root.Bees[i] = request[1]
                     # Respond to the node telling it the movement was successful
                     comm.send(True, dest=i, tag=1)
                     continue
-
-                if request[0] is 'Update':
-                    pass
                 
-                print(root)
-
-
         # While True
             # Display board
             # Broadcast board
@@ -96,20 +97,22 @@ def bee_test():
 
             if me.mode == 'wandering':
                 # TODO:This function currently not working... having an issue with the named tuple & MPI?
-                # new_pos = me.rand_pos()
+                new_pos = me.rand_pos()
 
-                # if not new_pos:
-                #     request = comm.gather(('Update',None), root=0)
-                #     continue
+                if not new_pos:
+                    request = comm.gather(None, root=0)
+                    continue
 
-                # request = comm.gather(('Move', new_pos), root=0)
-                # result = comm.recv(source=0,tag=1)
-                # # Update root with desired pos, get back success or fail
+                request = comm.gather(('Move', new_pos), root=0)
+                result = comm.recv(source=0,tag=1)
+                # Update root with desired pos, get back success or fail
 
-                # if not result:
-                #     continue
-                # me.pos = new_pos
-                pass
+                if not result:
+                # Couldn't move
+                    continue
+
+                # Could move
+                me.pos = new_pos
 
 
             if me.mode == 'navigating':
