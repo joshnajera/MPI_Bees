@@ -30,6 +30,7 @@ def bee_test():
     print('{}/{} starting'.format(rank, size))
     board = None
     pos = None
+    goal = None
 
     if rank == 0:
         root = Root()
@@ -37,6 +38,7 @@ def bee_test():
         board = comm.bcast(root.board, root=0)
         # Send other nodes their locations
         pos = comm.scatter(root.Bees, root=0)
+        goal = comm.bcast(root.goal_pnt, root=0)
         print("Everything initiated")
 
         while True:
@@ -83,6 +85,7 @@ def bee_test():
         # Get board and positional info
         board = comm.bcast(board, root=0)
         pos = comm.scatter(pos, root=0)
+        goal = comm.bcast(goal, root=0)
         # Instantiate self with board and position
         me = Worker(board, pos)
         print("Node {}:\tReceived {}".format(rank, pos))
@@ -96,14 +99,14 @@ def bee_test():
             # TODO:Check if near food
 
             if me.mode == 'wandering':
-                # TODO:This function currently not working... having an issue with the named tuple & MPI?
-                new_pos = me.rand_pos()
+                next_pos = me.rand_pos()
 
-                if not new_pos:
-                    request = comm.gather(None, root=0)
-                    continue
+                if not next_pos:
+                    rqst = None
+                else:
+                    rqst = ('Move', next_pos)
 
-                request = comm.gather(('Move', new_pos), root=0)
+                request = comm.gather(rqst, root=0)
                 result = comm.recv(source=0,tag=1)
                 # Update root with desired pos, get back success or fail
 
@@ -112,12 +115,27 @@ def bee_test():
                     continue
 
                 # Could move
-                me.pos = new_pos
+                me.pos = next_pos
 
 
             if me.mode == 'navigating':
-                # me.navigate()
-                pass
+                next_pos = me.navigate(goal)
+
+                if not next_pos:
+                    rqst = None
+                else:
+                    rqst = ('Move', next_pos)
+
+                request = comm.gather(rqst, root=0)
+                result = comm.recv(source=0,tag=1)
+                # Update root with desired pos, get back success or fail
+
+                if not result:
+                # Couldn't move
+                    continue
+
+                # Could move
+                me.pos = next_pos
 
 
         # me.process_request(node=0, tag_ = 1)
@@ -160,7 +178,7 @@ class Worker(Bee):
 
     def __init__(self, board, pos):
         Bee.__init__(self, board, pos)
-        self.mode = 'wandering'    # Wandering, Gathering
+        self.mode = 'navigating'    # Wandering, Gathering
 
     # make_request and process_request currently unused
     def make_request(self, info, node = 0, tag_ = 1):

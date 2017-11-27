@@ -40,8 +40,8 @@ class Board(object):
             self.generate_wall()
 
         # Generate 'hive'
-        goal_pnt = self.new_point()
-        self.board[goal_pnt.y][goal_pnt.x] = '&'
+        self.goal_pnt = self.new_point()
+        self.board[self.goal_pnt.y][self.goal_pnt.x] = '&'
 
 
     def add_bee(self):
@@ -168,16 +168,18 @@ class Bee(object):
     def navigate(self, goal_pnt):
         """   Navigates Bee to desired point   """
 
-        nav = Navigator(self.board.board, self.pos, goal_pnt)
+        nav = Navigator(self.board, self.pos, goal_pnt)
         result = nav.astar()
-        for item in result:
-            system('cls')
-            new_pos = item
-            self.board.move_to(self.pos, new_pos)
-            self.pos=new_pos
-            print(self.board)
-            sleep(.03)
-        print("Done")
+
+        # for item in result:
+        #     system('cls')
+        #     new_pos = item
+        #     self.board.move_to(self.pos, new_pos)
+        #     self.pos=new_pos
+        #     print(self.board)
+        #     sleep(.03)
+        # print("Done")
+        return result[0]
 
     def check_point(self, pnt):
         """   Gets what is currently at a given position   """
