@@ -1,297 +1,176 @@
 #!/usr/bin/python3
+"""
+Parallel Hello World
+"""
 
-from collections import namedtuple
-from time import sleep
-from os import system
-from copy import deepcopy
+from mpi4py import MPI
+from objects import Bee, Board
 import random as rand
-import mpi4py
-import math
+import sys
+
+size = MPI.COMM_WORLD.Get_size()
+rank = MPI.COMM_WORLD.Get_rank()
+name = MPI.Get_processor_name()
+info = MPI.Status()
+comm = MPI.COMM_WORLD
+
+# lower-cased   send,recv,isend,irecv correlate with generic python data objects
+# uper-cased    Send,Recv,Isend,Irecv correlate with buffered like data objects
 
 
-rand.seed()
+def bee_test():
 
-BoardDimensions = namedtuple('BoardDimensions', 'x y')
-Node = namedtuple('Node', 'location parent g h weight')
-Point = namedtuple('Point', 'x y')
+    print('{}/{} starting'.format(rank, size))
+    print(comm)
+    board = None
+    pos = None
 
-class Board(object):
-    """
-    Holds and manages board data
+    if rank == 0:
+        root = Root()
+        # Generate a random board 
+        board = comm.bcast(root.board, root=0)
+        # Send other nodes their locations
+        pos = comm.scatter(root.Bees, root=0)
+        print("Everything initiated")
+        print(root)
 
-    Legend:
-        #   -   Wall
-        %   -   Bee
-        &   -   Hive
-        *   -   Food
-    """
+        while True:
+            # Update everyone and ask them what they wants
+            new_board = comm.bcast(board, root=0)
+            requests = comm.gather(root=0)
+            for i, request in enumerate(requests):
 
-    Bees = [None]
+                # Skips if there is no request (i.e. Root makes no requests but still needs to pass something into gather?)
+                if not request:
+                    continue
+
+
+                # Currently assuming request is a tuple of (Request Type, Argument)
+                if request[0] == 'Move':
+                    print('{} wants to move to {}'.format(i, request[1]))
+
+                    # CAN REMOVE-- Check if that spot is clear
+                    if not root.is_clear(request[1]):
+                        comm.send(False, dest=i, tag=1)
+                        continue
+
+                    # Update the position of the bee
+                    root.move_to(root.Bees[i], request[1])
+                    root.Bees[i] = requests[1]
+                    # Respond to the node telling it the movement was successful
+                    comm.send(True, dest=i, tag=1)
+                    continue
+
+                if request[0] is 'Update':
+                    pass
+                
+                print(root)
+
+
+        # While True
+            # Display board
+            # Broadcast board
+            # Ask everyone for info
+            # if a movement request:
+                # check if new position is valid: 
+                    # update it, and return Success/Failure
+            # if other request???: process it
+            # apply updates
+
+
+    else:
+        # Get board and positional info
+        board = comm.bcast(board, root=0)
+        pos = comm.scatter(pos, root=0)
+        # Instantiate self with board and position
+        me = Worker(board, pos)
+        print("Node {}:\tReceived {}".format(rank, pos))
+
+
+        while(True):
+            # Get most updated board
+            new_board = comm.bcast(board, root=0)
+            me.board = new_board
+
+            # TODO:Check if near food
+
+            if me.mode == 'wandering':
+                # TODO:This function currently not working... having an issue with the named tuple & MPI?
+                # new_pos = me.rand_pos()
+
+                # if not new_pos:
+                #     request = comm.gather(('Update',None), root=0)
+                #     continue
+
+                # request = comm.gather(('Move', new_pos), root=0)
+                # result = comm.recv(source=0,tag=1)
+                # # Update root with desired pos, get back success or fail
+
+                # if not result:
+                #     continue
+                # me.pos = new_pos
+                pass
+
+
+            if me.mode == 'navigating':
+                # me.navigate()
+                pass
+
+
+        # me.process_request(node=0, tag_ = 1)
+
+
+class Root(Board):
 
     def __init__(self):
-        """   Sets up a board with dimensions: SIZE_X x SIZE_Y   """
-
-        # Instantiate board with given dimensions
-        self.dimension = BoardDimensions(x=60, y=30)
-        self.board = self.blank_map(self.dimension)
-
-        # Generate walls  -- TODO Validation of map after generation
-        for _ in range(rand.randint(9, 12)):
-            self.generate_wall()
-
-        # Generate 'hive'
-        goal_pnt = self.new_point()
-        self.board[goal_pnt.y][goal_pnt.x] = '&'
-
-
-    def add_bee(self):
-        pos = self.new_point()
-        Board.Bees.append(pos)
-        self.board[pos.y][pos.x] = '%'
-        return pos
-
-
-    def __str__(self):
-        """   Prints out the board   """
-
-        output = ''
-        for column in self.board:
-            for row in column:
-                output = output + str(row)
-            output = output + '\n'
-        return output
-
-
-    def move_to(self, old_pos, new_pos):
-        """   Moves a bee to a new location   """
-
-        self.board[old_pos.y][old_pos.x] = ' '
-        self.board[new_pos.y][new_pos.x] = '%'
-
-
-    def check_point(self, pnt):
-        """   Gets what is currently at a given position   """
-
-        return self.board[pnt.y][pnt.x]
-
-
-    def get_point(self):
-        """   Generates a new random point within the boundary   """
-
-        x = rand.randrange(1, self.dimension.x - 2)
-        y = rand.randrange(1, self.dimension.y - 2)
-        return Point(x, y)
-
-
-    def new_point(self):
-        """   Generates a random empty point within the boundary   """
-
-        while True:
-            x = rand.randrange(1, self.dimension.x - 2)
-            y = rand.randrange(1, self.dimension.y - 2)
-            if self.board[y][x] == ' ':
-                return Point(x, y)
-
-
-    def generate_wall(self):
-        """   Creates random walls   """
-
-        resolution_x = rand.randint(9, 17)
-        resolution_y = rand.randint(5, 11)
-
-        start = self.get_point()
-
-        for i in range(resolution_y):
-            for j in range(resolution_x):
-                if start.y + i >= self.dimension.y:
-                    continue
-                if start.x + j >= self.dimension.x:
-                    continue
-                self.board[start.y + i][start.x + j] = '#'
-
-
-    def blank_map(self, size=BoardDimensions(0, 0)):
-        """   Generates a blank map with boarders   """
-
-        board = [[' ' for j in range(size.x)] for i in range(size.y)]
-
-        # Generate boundary
-        for i, column in enumerate(board):
-            for j, _ in enumerate(column):
-                if i == 0 or i == (size.y - 1):
-                    board[i][j] = '#'
-                elif j == 0 or j == (size.x - 1):
-                    board[i][j] = '#'
-        return board
-
-
-class Bee(object):
-    """   Bee   """
-
-    def __init__(self, board, point):
-        self.board = board
-        self.pos = point
-
-
-    def rand_pos(self):
-        """   Randomly select open neighboring space   """
-
-        directions = [(0,1), (0,-1), (1,0), (-1,0)]
-        while True:
-            choice = rand.choice(directions)
-            dx, dy = choice
-            next_x = self.pos.x + dx
-            next_y = self.pos.y + dy
-
-            result = self.check_point(Point(next_x, next_y))
-            if result == ' ':
-                return Point(next_x, next_y)
-            else: 
-                directions.remove(choice)
-                if not directions:
-                    return False
-
-
-    def wander(self):
-        """   Wander around aimlessly   """
-
-        while True:
-            system('cls')
-            new_pos = self.rand_pos()
-            self.board.move_to(self.pos, new_pos)
-            self.pos = new_pos
-            print(self.board)
-            sleep(.1)
-
-
-    def navigate(self, goal_pnt):
-        """   Navigates Bee to desired point   """
-
-        nav = Navigator(self.board.board, self.pos, goal_pnt)
-        result = nav.astar()
-        for item in result:
-            system('cls')
-            new_pos = item
-            self.board.move_to(self.pos, new_pos)
-            self.pos=new_pos
-            print(self.board)
-            sleep(.03)
-        print("Done")
-
-    def check_point(self, pnt):
-        """   Gets what is currently at a given position   """
-
-        return self.board[pnt.y][pnt.x]
-
-
-class Navigator(object):
-    """   Manages A* navigation   """
-
-    # heuristic = namedtuple('Heuristics', 'g h sum')
-    # G     = Distance from current position
-    # H     = Distance to destination
-    # SUM   = H + G
-
-
-    @staticmethod
-    def get_key(node):
-        """   Gets key value to 'sort' the nodes by weight   """
-
-        return node.weight
-
-
-    @staticmethod
-    def distance(start=Point(0, 0), dest=Point(0, 0)):
-        """   Returns a rounded, and weighted distance beteen two points   """
-
-        result = math.sqrt(math.pow(start.x - dest.x, 2) + math.pow(start.y - dest.y, 2))
-        return int(result*10)
-
-
-    def __init__(self, board_array, start, dest):
-        """   Initializes with a copy of the board   """
-
-        # Deep copy so we don't touch Board's
-        self.board = deepcopy(board_array)
-        self.start = start
-        self.dest = dest
-        self.closed = []
-        self.path = {}
-        self.open = []
-
-        # Initiate algorithm with start point
-        self.origin = self.make_node(start, start)
-        self.open.append(self.origin)
-
-
-    def make_node(self, point, parent):
-        """   Makes a node out of given data   """
-
-        # G Heuristic = distance from start to point
-        g_heur = Navigator.distance(point, parent)
-        # H Heuristic = distance from point to destination
-        h_heur = Navigator.distance(point, self.dest)
-
-        return Node(point, parent, g_heur, h_heur, g_heur+h_heur)
-
-
-    def calculate_path(self):
-        """   Reverses the path and calculates shortest path   """
-        prior_point = self.path[self.dest]
-        full_path = [self.dest]
-
-        while prior_point != self.start:
-            full_path.insert(0, prior_point)
-            prior_point = self.path[prior_point]
-        self.path = full_path
-
-
-    def astar(self):
-        """   Performs a-star navigation   """
-
-        try:
-            next_node = self.open.pop(0)
-        except IndexError:
-            print("No path found!")
-            exit()
-
-        if next_node.location != self.start:
-            self.closed.append(next_node)
-            self.path[next_node.location] = next_node.parent
-
-        self.board[next_node.location.y][next_node.location.x] = 'X'
-        if next_node.location.x == self.dest.x and next_node.location.y == self.dest.y:
-            print("FOUND")
-            self.calculate_path()
-            return self.path
-        self.expand(next_node.location)
-
-        return self.astar()
-
-
-    def expand(self, pnt):
-        """   Expands / updates neighbors   """
-
-        # Check all neighbors
-        for i in range(-1, 2):
-            for j in range(-1, 2):
-
-                x = pnt.x + j
-                y = pnt.y + i
-
-                point = self.board[y][x]
-                if point in {'#', '%', 'X'}:
-                    continue
-                new_node = self.make_node(Point(x, y), pnt)
-                if point == 'O':
-                    for node in self.open:
-                        if node.location.x == x and node.location.y == y:
-                            if new_node.weight < node.weight:
-                                self.open.remove(node)
-                                self.open.append(new_node)
-                    continue
-                self.board[y][x] = 'O'
-
-
-                self.open.append(new_node)
-        self.open.sort(key=Navigator.get_key)
+        Board.__init__(self)
+
+        for i in range(1, size):
+            self.add_bee()
+    
+    def is_clear(self, point):
+        if self.check_point(point) == ' ':
+            return True
+        else:
+            return False
+
+    # make_request and process_request currently unused
+    def make_request(self, desired_info, node, tag_ = 1):
+        '''   Requests info from another node, and waits for a response   '''
+        comm.ssend(desired_info, dest=node, tag=tag_)
+        resp = comm.recv(source=node, tag = tag_)
+        return resp
+
+    def process_request(self, node=0, tag_ = 1):
+        '''   Waits for and processes one request
+        request: ('action', 'args')'''
+        request, args = comm.recv(source=node, tag = tag_)
+
+        if request[0] == 'move':
+            if self.check_point(args) == ' ':
+                comm.ssend(True, dest=node, tag = tag_)
+            else:
+                comm.ssend(False, dest=node, tag = tag_)
+                
+
+class Worker(Bee):
+
+    def __init__(self, board, pos):
+        Bee.__init__(self, board, pos)
+        self.mode = 'wandering'    # Wandering, Gathering
+
+    # make_request and process_request currently unused
+    def make_request(self, info, node = 0, tag_ = 1):
+        '''   Waits for and processes one request   '''
+        comm.ssend(info, dest=node)
+        return comm.recv(source=node, tag = tag_)
+
+    def process_request(self, node=0, tag_ = 1):
+        '''   Requests info from another node, and waits for a response   '''
+        request = comm.recv(source=node, tag = tag_)
+        if request == 'pos':
+            comm.ssend(self.pos, dest=node, tag = tag_)
+
+
+if __name__ == '__main__':
+    bee_test()
